@@ -90,6 +90,13 @@ app.patch('/api/log/:id', (req, res) => {
   if (typeof req.body.comment !== 'undefined') {
     entry.comment = req.body.comment.slice(0, 165);
   }
+  if (typeof req.body.validated !== 'undefined') {
+    entry.validated = req.body.validated === true;
+    if (!entry.validated) {
+      entry.validatedBy = null;
+      entry.validatedAt = null;
+    }
+  }
   saveData(data);
   res.json(entry);
 });
