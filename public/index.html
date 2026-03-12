@@ -882,10 +882,13 @@ async function submitPin() {
   }
 
   verifiedPin = pinValue;
+  const savedMode = pinMode;
+  const savedValidateId = pendingValidateId;
+  const savedEditId = pendingEditId;
   closePin();
 
-  if (pinMode === 'validate') {
-    const res = await fetch(`/api/validate/${pendingValidateId}`, {
+  if (savedMode === 'validate') {
+    const res = await fetch(`/api/validate/${savedValidateId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pin: verifiedPin, parentName: 'Parent' })
@@ -894,10 +897,10 @@ async function submitPin() {
       showToast('✅ Entry approved!', 'success');
       await loadLogs();
     }
-  } else if (pinMode === 'edit') {
-    openEditModal(pendingEditId);
-  } else if (pinMode === 'delete') {
-    const res = await fetch(`/api/log/${pendingEditId}`, {
+  } else if (savedMode === 'edit') {
+    openEditModal(savedEditId);
+  } else if (savedMode === 'delete') {
+    const res = await fetch(`/api/log/${savedEditId}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pin: verifiedPin })
