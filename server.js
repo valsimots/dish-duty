@@ -92,7 +92,10 @@ app.patch('/api/log/:id', (req, res) => {
   }
   if (typeof req.body.validated !== 'undefined') {
     entry.validated = req.body.validated === true;
-    if (!entry.validated) {
+    if (entry.validated) {
+      entry.validatedBy = req.body.parentName || 'Parent';
+      entry.validatedAt = new Date().toISOString();
+    } else {
       entry.validatedBy = null;
       entry.validatedAt = null;
     }
