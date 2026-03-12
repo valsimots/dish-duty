@@ -324,6 +324,18 @@
   .pin-key.empty-key { background: transparent; border-color: transparent; cursor: default; }
 
   .modal-error { color: var(--red); font-size: 13px; font-weight: 700; height: 20px; }
+  .parent-picker {
+    display: flex; gap: 10px; justify-content: center; margin-bottom: 20px;
+  }
+  .parent-btn {
+    flex: 1; padding: 10px;
+    border-radius: 14px; border: 2.5px solid rgba(59,158,221,0.25);
+    background: var(--light); color: var(--text);
+    font-family: 'Fredoka One', cursive; font-size: 16px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .parent-btn.selected { background: var(--blue); color: white; border-color: var(--blue); }
+  .parent-btn:active { transform: scale(0.95); }
   .modal-close {
     margin-top: 12px;
     background: none;
@@ -506,6 +518,10 @@
   <div class="modal">
     <h2>🔐 Parent Check</h2>
     <p id="pinModalDesc">Enter your 4-digit PIN to validate this entry</p>
+    <div class="parent-picker">
+      <button class="parent-btn" id="parentBtnMama" onclick="selectParent('Mama')">👩 Mama</button>
+      <button class="parent-btn" id="parentBtnTata" onclick="selectParent('Tata')">👨 Tata</button>
+    </div>
     <div class="pin-display" id="pinDisplay">
       <div class="pin-dot"></div>
       <div class="pin-dot"></div>
@@ -553,9 +569,16 @@
     </div>
     <div class="edit-field">
       <label>Status</label>
-      <select class="edit-select" id="editStatus">
+      <select class="edit-select" id="editStatus" onchange="toggleApprovedBy()">
         <option value="pending">⏳ Pending</option>
         <option value="approved">✅ Approved</option>
+      </select>
+    </div>
+    <div class="edit-field" id="approvedByField" style="display:none">
+      <label>Approved by</label>
+      <select class="edit-select" id="editApprovedBy">
+        <option value="Mama">👩 Mama</option>
+        <option value="Tata">👨 Tata</option>
       </select>
     </div>
     <div class="edit-field">
@@ -577,6 +600,7 @@
 <script>
 const CHILD_AVATARS = ['🦊', '🐬', '🦋', '🐸', '⭐', '🦄'];
 const CHILD_IMAGES = ['/image1.png', '/image2.png'];
+let selectedParent = null;
 
 let selectedChild = null;
 let children = [];
@@ -754,10 +778,24 @@ function openDeleteFlow(id) {
   openPinModal('🗑️ Parent Check', 'Enter PIN to delete this entry');
 }
 
+function selectParent(name) {
+  selectedParent = name;
+  document.getElementById('parentBtnMama').classList.toggle('selected', name === 'Mama');
+  document.getElementById('parentBtnTata').classList.toggle('selected', name === 'Tata');
+}
+
+function toggleApprovedBy() {
+  const isApproved = document.getElementById('editStatus').value === 'approved';
+  document.getElementById('approvedByField').style.display = isApproved ? 'block' : 'none';
+}
+
 function openPinModal(title, desc) {
   pinValue = '';
+  selectedParent = null;
   updatePinDisplay();
   document.getElementById('pinError').textContent = '';
+  document.getElementById('parentBtnMama').classList.remove('selected');
+  document.getElementById('parentBtnTata').classList.remove('selected');
   document.querySelector('#pinModal h2').textContent = title;
   document.getElementById('pinModalDesc').textContent = desc;
   document.getElementById('pinModal').classList.add('open');
@@ -770,6 +808,8 @@ function openEditModal(id) {
   sel.innerHTML = children.map(n => `<option value="${n}" ${n === log.childName ? 'selected' : ''}>${n}</option>`).join('');
   document.getElementById('editAction').value = log.action;
   document.getElementById('editStatus').value = log.validated ? 'approved' : 'pending';
+  document.getElementById('editApprovedBy').value = log.validatedBy && ['Mama','Tata'].includes(log.validatedBy) ? log.validatedBy : 'Mama';
+  toggleApprovedBy();
   // Convert ISO timestamp to datetime-local format (YYYY-MM-DDTHH:MM)
   const localDt = new Date(log.timestamp);
   const pad = n => String(n).padStart(2, '0');
@@ -799,10 +839,11 @@ async function saveEdit() {
   const timestampVal = document.getElementById('editTimestamp').value;
   const comment = document.getElementById('editComment').value.trim();
   const validated = document.getElementById('editStatus').value === 'approved';
+  const parentName = validated ? document.getElementById('editApprovedBy').value : null;
   const res = await fetch(`/api/log/${pendingEditId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pin: verifiedPin, childName, action, timestamp: timestampVal, comment, validated })
+    body: JSON.stringify({ pin: verifiedPin, childName, action, timestamp: timestampVal, comment, validated, parentName })
   });
   if (res.ok) {
     closeEdit();
@@ -868,6 +909,10 @@ function updatePinDisplay() {
 }
 
 async function submitPin() {
+  if (!selectedParent) {
+    document.getElementById('pinError').textContent = '👆 Please select Mama or Tata first';
+    return;
+  }
   // First verify the PIN
   const verifyRes = await fetch('/api/verify-pin', {
     method: 'POST',
@@ -900,7 +945,7 @@ async function submitPin() {
     const res = await fetch(`/api/validate/${savedValidateId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin: verifiedPin, parentName: 'Parent' })
+      body: JSON.stringify({ pin: verifiedPin, parentName: selectedParent })
     });
     if (res.ok) {
       showToast('✅ Entry approved!', 'success');
