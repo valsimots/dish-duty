@@ -6,6 +6,7 @@
 <title>Dish Duty 🍽️</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Fredoka+One&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root {
     --sky: #e0f4ff;
@@ -428,6 +429,125 @@
     font-weight: 600; margin-top: 3px;
     font-style: italic; opacity: 0.75;
   }
+
+  /* SHOW MORE */
+  .log-card-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
+  }
+  .log-card-header .card-title { margin-bottom: 0; }
+  .show-all-link {
+    font-size: 12px; font-weight: 800; color: var(--blue);
+    background: none; border: none; cursor: pointer;
+    font-family: 'Nunito', sans-serif; padding: 4px 8px;
+    border-radius: 8px; transition: background 0.15s;
+    text-decoration: underline; text-underline-offset: 3px;
+  }
+  .show-all-link:hover { background: rgba(59,158,221,0.1); }
+  .show-more-btn {
+    width: 100%; margin-top: 12px; padding: 12px;
+    background: var(--light); border: 2px solid rgba(59,158,221,0.2);
+    border-radius: 14px; color: var(--blue-dark);
+    font-family: 'Fredoka One', cursive; font-size: 16px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .show-more-btn:active { background: rgba(59,158,221,0.1); }
+
+  /* DASHBOARD OVERLAY */
+  .dashboard-overlay {
+    position: fixed; inset: 0; z-index: 150;
+    background: var(--sky);
+    background-image:
+      radial-gradient(circle at 10% 20%, rgba(255,216,77,0.2) 0%, transparent 50%),
+      radial-gradient(circle at 90% 80%, rgba(59,158,221,0.2) 0%, transparent 50%);
+    overflow-y: auto;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(.4,0,.2,1);
+  }
+  .dashboard-overlay.open { transform: translateY(0); }
+  .dashboard-inner { max-width: 480px; margin: 0 auto; padding: 0 16px 60px; }
+  .dashboard-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 28px 0 20px;
+  }
+  .dashboard-back {
+    background: white; border: none; border-radius: 12px;
+    width: 40px; height: 40px; font-size: 20px;
+    cursor: pointer; box-shadow: var(--card-shadow);
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s; flex-shrink: 0;
+  }
+  .dashboard-back:active { transform: scale(0.92); }
+  .dashboard-title {
+    font-family: 'Fredoka One', cursive;
+    font-size: 28px; color: var(--blue-dark);
+  }
+
+  /* STAT CARDS */
+  .stat-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; margin-bottom: 16px;
+  }
+  .stat-card {
+    background: white; border-radius: 18px;
+    padding: 18px 16px; box-shadow: var(--card-shadow);
+    border: 2px solid rgba(59,158,221,0.1);
+    text-align: center;
+  }
+  .stat-card.full { grid-column: 1 / -1; }
+  .stat-num {
+    font-family: 'Fredoka One', cursive;
+    font-size: 36px; color: var(--blue-dark); line-height: 1;
+  }
+  .stat-label {
+    font-size: 12px; font-weight: 700; color: var(--gray);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px;
+  }
+  .stat-sub {
+    font-size: 13px; font-weight: 700; color: var(--text); margin-top: 6px;
+  }
+
+  /* CHART CARD */
+  .chart-card {
+    background: white; border-radius: 18px;
+    padding: 20px; box-shadow: var(--card-shadow);
+    border: 2px solid rgba(59,158,221,0.1);
+    margin-bottom: 16px;
+  }
+  .chart-title {
+    font-family: 'Fredoka One', cursive;
+    font-size: 17px; color: var(--blue-dark); margin-bottom: 14px;
+  }
+
+  /* FULL TABLE */
+  .table-card {
+    background: white; border-radius: 18px;
+    padding: 20px; box-shadow: var(--card-shadow);
+    border: 2px solid rgba(59,158,221,0.1);
+    margin-bottom: 16px; overflow-x: auto;
+  }
+  .entries-table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+  }
+  .entries-table th {
+    text-align: left; padding: 8px 10px;
+    background: var(--light); color: var(--gray);
+    font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.5px; font-size: 11px;
+  }
+  .entries-table th:first-child { border-radius: 8px 0 0 8px; }
+  .entries-table th:last-child  { border-radius: 0 8px 8px 0; }
+  .entries-table td {
+    padding: 10px 10px; border-bottom: 1px solid rgba(59,158,221,0.08);
+    font-weight: 600; color: var(--text); vertical-align: middle;
+  }
+  .entries-table tr:last-child td { border-bottom: none; }
+  .entries-table tr.validated-row td { background: #f6fff9; }
+  .tbl-badge {
+    padding: 3px 8px; border-radius: 20px;
+    font-size: 10px; font-weight: 800; text-transform: uppercase;
+  }
+  .tbl-badge.ok      { background: var(--green); color: white; }
+  .tbl-badge.pending { background: var(--yellow); color: #7a5c00; }
   .edit-actions { display: flex; gap: 10px; margin-top: 20px; }
   .btn-save {
     flex: 1; padding: 14px;
@@ -504,10 +624,14 @@
 
   <!-- RECENT ENTRIES CARD -->
   <div class="card">
-    <div class="card-title">📋 Last 10 Entries</div>
+    <div class="log-card-header">
+      <div class="card-title">📋 <span id="logCardTitle">Last 5 Entries</span></div>
+      <button class="show-all-link" onclick="openDashboard()">Show All</button>
+    </div>
     <div class="log-list" id="logList">
       <!-- populated by JS -->
     </div>
+    <button class="show-more-btn" id="showMoreBtn" style="display:none" onclick="showMore()">Load 25 More ↓</button>
   </div>
 
   <div style="height: 20px;"></div>
@@ -724,9 +848,29 @@ async function logAction(action) {
   }
 }
 
+let visibleCount = 5;
+
+function showMore() {
+  visibleCount += 25;
+  renderLogs();
+}
+
 function renderLogs() {
   const list = document.getElementById('logList');
-  const logs = allLogs.slice(0, 10);
+  const logs = allLogs.slice(0, visibleCount);
+  const total = allLogs.length;
+
+  // Update title
+  const showing = Math.min(visibleCount, total);
+  document.getElementById('logCardTitle').textContent =
+    total <= 5 ? `Last ${total} Entr${total === 1 ? 'y' : 'ies'}`
+               : `Last ${showing} of ${total} Entries`;
+
+  // Show/hide Show More button
+  const showMoreBtn = document.getElementById('showMoreBtn');
+  showMoreBtn.style.display = visibleCount < total ? 'block' : 'none';
+  const remaining = total - visibleCount;
+  showMoreBtn.textContent = `Load ${Math.min(25, remaining)} More ↓`;
 
   if (!logs.length) {
     list.innerHTML = `<div class="empty-state"><span class="icon">🫧</span>No entries yet — get washing!</div>`;
@@ -761,9 +905,128 @@ function renderLogs() {
   }).join('');
 }
 
+// ── DASHBOARD ─────────────────────────────────────────────
+let chartByChild = null;
+let chartActivity = null;
+
+function openDashboard() {
+  pinMode = 'dashboard';
+  openPinModal('📊 Parent Check', 'Enter PIN to view the full dashboard');
+}
+
+function closeDashboard() {
+  document.getElementById('dashboardOverlay').classList.remove('open');
+}
+
+function renderDashboard() {
+  const overlay = document.getElementById('dashboardOverlay');
+  overlay.classList.add('open');
+  overlay.scrollTop = 0;
+
+  const total = allLogs.length;
+  const approved = allLogs.filter(l => l.validated).length;
+  const pending  = total - approved;
+
+  // Tallies per child
+  const childStats = children.map(name => ({
+    name,
+    empty: allLogs.filter(l => l.childName === name && l.action === 'empty').length,
+    fill:  allLogs.filter(l => l.childName === name && l.action === 'fill').length,
+    total: allLogs.filter(l => l.childName === name).length,
+  }));
+
+  // Streak: consecutive days with at least one entry (most recent)
+  const daySet = new Set(allLogs.map(l => l.timestamp.slice(0, 10)));
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    if (daySet.has(key)) streak++; else break;
+  }
+
+  // Stat cards
+  const statsEl = document.getElementById('dashStats');
+  statsEl.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-num">${total}</div>
+      <div class="stat-label">Total Entries</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">${streak}</div>
+      <div class="stat-label">Day Streak 🔥</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:var(--green-dark)">${approved}</div>
+      <div class="stat-label">Approved ✅</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:var(--yellow-dark)">${pending}</div>
+      <div class="stat-label">Pending ⏳</div>
+    </div>
+    ${childStats.map(c => `
+    <div class="stat-card">
+      <div class="stat-num">${c.total}</div>
+      <div class="stat-label">${c.name}</div>
+      <div class="stat-sub">⬆️ ${c.empty} &nbsp; ⬇️ ${c.fill}</div>
+    </div>`).join('')}
+  `;
+
+  // Chart: score by child (grouped bar)
+  if (chartByChild) chartByChild.destroy();
+  const ctx1 = document.getElementById('chartByChild').getContext('2d');
+  chartByChild = new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels: childStats.map(c => c.name),
+      datasets: [
+        { label: '⬆️ Emptied', data: childStats.map(c => c.empty), backgroundColor: '#3b9edd', borderRadius: 8 },
+        { label: '⬇️ Filled',  data: childStats.map(c => c.fill),  backgroundColor: '#4ecb71', borderRadius: 8 },
+      ]
+    },
+    options: {
+      responsive: true, plugins: { legend: { position: 'bottom' } },
+      scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+    }
+  });
+
+  // Chart: activity over last 14 days
+  if (chartActivity) chartActivity.destroy();
+  const days = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date(today); d.setDate(d.getDate() - (13 - i));
+    return d.toISOString().slice(0, 10);
+  });
+  const dayCounts = days.map(day => allLogs.filter(l => l.timestamp.slice(0, 10) === day).length);
+  const dayLabels = days.map(d => { const dt = new Date(d + 'T12:00:00'); return dt.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); });
+  const ctx2 = document.getElementById('chartActivity').getContext('2d');
+  chartActivity = new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: dayLabels,
+      datasets: [{ label: 'Entries', data: dayCounts, backgroundColor: '#9b59f5', borderRadius: 6 }]
+    },
+    options: {
+      responsive: true, plugins: { legend: { display: false } },
+      scales: { x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+    }
+  });
+
+  // Full table
+  const tbody = document.getElementById('dashTable');
+  tbody.innerHTML = allLogs.map(log => `
+    <tr class="${log.validated ? 'validated-row' : ''}">
+      <td>${log.childName}</td>
+      <td>${log.action === 'empty' ? '⬆️ Emptied' : '⬇️ Filled'}</td>
+      <td style="white-space:nowrap">${new Date(log.timestamp).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}<br><span style="color:var(--gray);font-size:11px">${new Date(log.timestamp).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', hour12: true })}</span></td>
+      <td><span class="tbl-badge ${log.validated ? 'ok' : 'pending'}">${log.validated ? '✅' : '⏳'}</span></td>
+      <td style="font-style:italic;color:var(--gray);font-size:11px">${log.comment || ''}</td>
+    </tr>
+  `).join('');
+}
+
 // ── EDIT / DELETE FLOW ──────────────────────────────
 // We reuse the PIN modal for auth, then show the edit modal.
-let pinMode = 'validate'; // 'validate' | 'edit' | 'delete'
+let pinMode = 'validate'; // 'validate' | 'edit' | 'delete' | 'dashboard'
 let pendingEditId = null;
 
 function openEditFlow(id) {
@@ -953,6 +1216,8 @@ async function submitPin() {
     }
   } else if (savedMode === 'edit') {
     openEditModal(savedEditId);
+  } else if (savedMode === 'dashboard') {
+    renderDashboard();
   } else if (savedMode === 'delete') {
     const res = await fetch(`/api/log/${savedEditId}`, {
       method: 'DELETE',
@@ -966,6 +1231,49 @@ async function submitPin() {
   }
 }
 
+<!-- DASHBOARD OVERLAY -->
+<div class="dashboard-overlay" id="dashboardOverlay">
+  <div class="dashboard-inner">
+    <div class="dashboard-header">
+      <button class="dashboard-back" onclick="closeDashboard()">←</button>
+      <div class="dashboard-title">📊 Full Dashboard</div>
+    </div>
+
+    <!-- STAT CARDS -->
+    <div class="stat-grid" id="dashStats"></div>
+
+    <!-- CHART: actions per child -->
+    <div class="chart-card">
+      <div class="chart-title">🏆 Score by Child</div>
+      <canvas id="chartByChild" height="160"></canvas>
+    </div>
+
+    <!-- CHART: activity over last 14 days -->
+    <div class="chart-card">
+      <div class="chart-title">📅 Activity — Last 14 Days</div>
+      <canvas id="chartActivity" height="160"></canvas>
+    </div>
+
+    <!-- FULL TABLE -->
+    <div class="table-card">
+      <div class="chart-title">📋 All Entries</div>
+      <table class="entries-table">
+        <thead>
+          <tr>
+            <th>Child</th>
+            <th>Action</th>
+            <th>Date / Time</th>
+            <th>Status</th>
+            <th>Comment</th>
+          </tr>
+        </thead>
+        <tbody id="dashTable"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
 // Close modal on overlay click
 document.getElementById('pinModal').addEventListener('click', function(e) {
   if (e.target === this) closePin();
