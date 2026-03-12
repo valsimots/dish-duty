@@ -143,7 +143,22 @@
   .child-btn.selected:nth-child(4) { background: var(--green); color: white; }
   .child-btn:active { transform: scale(0.95); }
   .child-btn .avatar { font-size: 32px; }
+  .child-btn .avatar-img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
   .child-btn .name { font-size: 16px; }
+  .child-btn .tally {
+    font-family: 'Nunito', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    opacity: 0.75;
+    display: flex;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .child-btn.selected .tally { opacity: 0.9; }
+  .tally-empty { color: #2278b5; }
+  .tally-fill  { color: #2ea04f; }
+  .child-btn.selected .tally-empty,
+  .child-btn.selected .tally-fill { color: rgba(255,255,255,0.9); }
 
   /* ACTION BUTTONS */
   .action-grid {
@@ -377,6 +392,14 @@
     outline: none;
   }
   .edit-select:focus { border-color: var(--blue); }
+  .edit-datetime {
+    width: 100%; padding: 12px 14px;
+    border-radius: 12px; border: 2px solid rgba(59,158,221,0.25);
+    font-family: 'Nunito', sans-serif; font-size: 15px; font-weight: 700;
+    color: var(--text); background: var(--light);
+    outline: none;
+  }
+  .edit-datetime:focus { border-color: var(--blue); }
   .edit-actions { display: flex; gap: 10px; margin-top: 20px; }
   .btn-save {
     flex: 1; padding: 14px;
@@ -508,6 +531,10 @@
         <option value="fill">⬇️ Filled dishwasher</option>
       </select>
     </div>
+    <div class="edit-field">
+      <label>Date &amp; Time</label>
+      <input type="datetime-local" class="edit-datetime" id="editTimestamp">
+    </div>
     <div class="edit-actions">
       <button class="btn-save" onclick="saveEdit()">Save Changes</button>
       <button class="btn-delete" onclick="deleteEntry()">🗑️</button>
@@ -521,6 +548,7 @@
 
 <script>
 const CHILD_AVATARS = ['🦊', '🐬', '🦋', '🐸', '⭐', '🦄'];
+const CHILD_IMAGES = ['/image1.png', '/image2.png'];
 
 let selectedChild = null;
 let children = [];
@@ -576,12 +604,28 @@ async function init() {
   await loadLogs();
 }
 
+function getAvatar(index) {
+  const imgSrc = CHILD_IMAGES[index];
+  if (imgSrc) return `<img class="avatar-img" src="${imgSrc}" onerror="this.outerHTML='<span class=\\'avatar\\'>${CHILD_AVATARS[index % CHILD_AVATARS.length]}</span>'">`;
+  return `<span class="avatar">${CHILD_AVATARS[index % CHILD_AVATARS.length]}</span>`;
+}
+
+function getTallies(name) {
+  const emptied = allLogs.filter(l => l.childName === name && l.action === 'empty').length;
+  const filled  = allLogs.filter(l => l.childName === name && l.action === 'fill').length;
+  return `<span class="tally">
+    <span class="tally-empty">⬆️ ${emptied}</span>
+    <span class="tally-fill">⬇️ ${filled}</span>
+  </span>`;
+}
+
 function renderChildren() {
   const grid = document.getElementById('childGrid');
   grid.innerHTML = children.map((name, i) => `
     <button class="child-btn ripple-container" onclick="selectChild('${name}', this)">
-      <span class="avatar">${CHILD_AVATARS[i % CHILD_AVATARS.length]}</span>
+      ${getAvatar(i)}
       <span class="name">${name}</span>
+      ${getTallies(name)}
     </button>
   `).join('');
 }
@@ -604,6 +648,7 @@ function selectChild(name, btn) {
 
 async function loadLogs() {
   allLogs = await fetch('/api/logs').then(r => r.json());
+  renderChildren();
   renderLogs();
 }
 
@@ -638,7 +683,7 @@ function renderLogs() {
 
   list.innerHTML = logs.map(log => {
     const idx = children.indexOf(log.childName);
-    const avatar = CHILD_AVATARS[idx >= 0 ? idx : 0];
+    const avatar = idx >= 0 ? getAvatar(idx) : `<span class="avatar">${CHILD_AVATARS[0]}</span>`;
     return `
     <div class="log-item ${log.validated ? 'validated' : ''}">
       <div class="action-badge">${log.action === 'empty' ? '⬆️' : '⬇️'}</div>
@@ -692,10 +737,14 @@ function openPinModal(title, desc) {
 function openEditModal(id) {
   const log = allLogs.find(l => l.id === id);
   if (!log) return;
-  // Populate child dropdown
   const sel = document.getElementById('editChild');
   sel.innerHTML = children.map(n => `<option value="${n}" ${n === log.childName ? 'selected' : ''}>${n}</option>`).join('');
   document.getElementById('editAction').value = log.action;
+  // Convert ISO timestamp to datetime-local format (YYYY-MM-DDTHH:MM)
+  const localDt = new Date(log.timestamp);
+  const pad = n => String(n).padStart(2, '0');
+  const dtLocal = `${localDt.getFullYear()}-${pad(localDt.getMonth()+1)}-${pad(localDt.getDate())}T${pad(localDt.getHours())}:${pad(localDt.getMinutes())}`;
+  document.getElementById('editTimestamp').value = dtLocal;
   document.getElementById('editModal').classList.add('open');
 }
 
@@ -707,11 +756,11 @@ function closeEdit() {
 async function saveEdit() {
   const childName = document.getElementById('editChild').value;
   const action = document.getElementById('editAction').value;
-  // We already verified PIN — send with stored pin
+  const timestampVal = document.getElementById('editTimestamp').value;
   const res = await fetch(`/api/log/${pendingEditId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pin: verifiedPin, childName, action })
+    body: JSON.stringify({ pin: verifiedPin, childName, action, timestamp: timestampVal })
   });
   if (res.ok) {
     closeEdit();
