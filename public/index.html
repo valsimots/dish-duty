@@ -145,6 +145,21 @@
   .child-btn:active { transform: scale(0.95); }
   .child-btn .avatar { font-size: 32px; }
   .child-btn .name { font-size: 16px; }
+  .child-stats-btn {
+    position: absolute; top: 6px; right: 6px;
+    background: rgba(255,255,255,0.7);
+    border: none; border-radius: 8px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 10px; font-weight: 800;
+    color: var(--blue-dark); padding: 3px 7px;
+    cursor: pointer; z-index: 2;
+    transition: background 0.15s;
+    text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  .child-btn.selected .child-stats-btn {
+    background: rgba(255,255,255,0.25); color: white;
+  }
+  .child-stats-btn:active { transform: scale(0.92); }
   .child-btn .tally {
     font-family: 'Nunito', sans-serif;
     font-size: 11px;
@@ -547,6 +562,38 @@
   }
   .tbl-badge.ok      { background: var(--green); color: white; }
   .tbl-badge.pending { background: var(--yellow); color: #7a5c00; }
+
+  /* CHILD DASHBOARD SPECIFICS */
+  .child-dash-avatar {
+    font-size: 56px; text-align: center;
+    display: block; margin: 0 auto 8px;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.15));
+  }
+  .child-dash-name {
+    font-family: 'Fredoka One', cursive;
+    font-size: 28px; color: var(--blue-dark);
+    text-align: center; margin-bottom: 4px;
+  }
+  .child-dash-sub {
+    text-align: center; font-size: 13px;
+    font-weight: 700; color: var(--gray); margin-bottom: 20px;
+  }
+  .stat-card.highlight {
+    background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+    color: white;
+  }
+  .stat-card.highlight .stat-num,
+  .stat-card.highlight .stat-label,
+  .stat-card.highlight .stat-sub { color: white; }
+  .approval-bar-wrap {
+    background: rgba(59,158,221,0.1); border-radius: 20px;
+    height: 10px; overflow: hidden; margin-top: 8px;
+  }
+  .approval-bar-fill {
+    height: 100%; border-radius: 20px;
+    background: linear-gradient(90deg, var(--green), var(--green-dark));
+    transition: width 0.6s ease;
+  }
   .edit-actions { display: flex; gap: 10px; margin-top: 20px; }
   .btn-save {
     flex: 1; padding: 14px;
@@ -796,6 +843,7 @@ function renderChildren() {
   const grid = document.getElementById('childGrid');
   grid.innerHTML = children.map((name, i) => `
     <button class="child-btn ripple-container" onclick="selectChild('${name}', this)">
+      <button class="child-stats-btn" onclick="event.stopPropagation(); openChildDashboard('${name}')">Stats</button>
       ${getAvatar(i)}
       <span class="name">${name}</span>
       ${getTallies(name)}
@@ -902,13 +950,54 @@ function renderLogs() {
   }).join('');
 }
 
-// ── DASHBOARD ─────────────────────────────────────────────
-let chartByChild = null;
-let chartActivity = null;
+// ── SHARED DASHBOARD HELPERS ──────────────────────────────
+function calcStreak(logs) {
+  const daySet = new Set(logs.map(l => l.timestamp.slice(0, 10)));
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today); d.setDate(d.getDate() - i);
+    if (daySet.has(d.toISOString().slice(0, 10))) streak++; else break;
+  }
+  return streak;
+}
+
+function calcWeeklyAvg(logs) {
+  if (!logs.length) return 0;
+  const oldest = new Date(logs[logs.length - 1].timestamp);
+  const weeks = Math.max(1, Math.ceil((Date.now() - oldest) / (7 * 86400000)));
+  return (logs.length / weeks).toFixed(1);
+}
+
+function mostActiveDay(logs) {
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const counts = Array(7).fill(0);
+  logs.forEach(l => counts[new Date(l.timestamp).getDay()]++);
+  const max = Math.max(...counts);
+  return max === 0 ? '—' : days[counts.indexOf(max)];
+}
+
+function lastEntryDate(logs) {
+  if (!logs.length) return '—';
+  return new Date(logs[0].timestamp).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function buildActivityData(logs, days) {
+  const today = new Date();
+  return Array.from({ length: days }, (_, i) => {
+    const d = new Date(today); d.setDate(d.getDate() - (days - 1 - i));
+    const key = d.toISOString().slice(0, 10);
+    return { key, count: logs.filter(l => l.timestamp.slice(0, 10) === key).length,
+      label: d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) };
+  });
+}
+
+// ── PARENT DASHBOARD ──────────────────────────────────────
+let chartByChild = null, chartActivity = null, chartApproval = null;
 
 function openDashboard() {
   pinMode = 'dashboard';
-  openPinModal('📊 Parent Check', 'Enter PIN to view the full dashboard');
+  openPinModal('📊 Parent Dashboard', 'Enter PIN to view the full dashboard');
 }
 
 function closeDashboard() {
@@ -920,38 +1009,184 @@ function renderDashboard() {
   overlay.classList.add('open');
   overlay.scrollTop = 0;
 
-  const total = allLogs.length;
+  const total    = allLogs.length;
   const approved = allLogs.filter(l => l.validated).length;
   const pending  = total - approved;
+  const streak   = calcStreak(allLogs);
+  const weekAvg  = calcWeeklyAvg(allLogs);
+  const approvalRate = total ? Math.round(approved / total * 100) : 0;
 
-  // Tallies per child
-  const childStats = children.map(name => ({
-    name,
-    empty: allLogs.filter(l => l.childName === name && l.action === 'empty').length,
-    fill:  allLogs.filter(l => l.childName === name && l.action === 'fill').length,
-    total: allLogs.filter(l => l.childName === name).length,
-  }));
+  const mamaCount = allLogs.filter(l => l.validatedBy === 'Mama').length;
+  const tataCount = allLogs.filter(l => l.validatedBy === 'Tata').length;
 
-  // Streak: consecutive days with at least one entry (most recent)
-  const daySet = new Set(allLogs.map(l => l.timestamp.slice(0, 10)));
-  let streak = 0;
-  const today = new Date();
-  for (let i = 0; i < 365; i++) {
-    const d = new Date(today); d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    if (daySet.has(key)) streak++; else break;
-  }
+  const childStats = children.map(name => {
+    const logs = allLogs.filter(l => l.childName === name);
+    return {
+      name,
+      empty: logs.filter(l => l.action === 'empty').length,
+      fill:  logs.filter(l => l.action === 'fill').length,
+      total: logs.length,
+      streak: calcStreak(logs),
+      weekAvg: calcWeeklyAvg(logs),
+    };
+  });
 
-  // Stat cards
-  const statsEl = document.getElementById('dashStats');
-  statsEl.innerHTML = `
-    <div class="stat-card">
+  const leader = [...childStats].sort((a,b) => b.total - a.total)[0];
+
+  document.getElementById('dashStats').innerHTML = `
+    <div class="stat-card highlight">
       <div class="stat-num">${total}</div>
       <div class="stat-label">Total Entries</div>
     </div>
     <div class="stat-card">
-      <div class="stat-num">${streak}</div>
-      <div class="stat-label">Day Streak 🔥</div>
+      <div class="stat-num">${streak} 🔥</div>
+      <div class="stat-label">Day Streak</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:var(--green-dark)">${approved}</div>
+      <div class="stat-label">Approved ✅</div>
+      <div class="stat-sub">${approvalRate}% rate</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" style="color:var(--yellow-dark)">${pending}</div>
+      <div class="stat-label">Pending ⏳</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">${weekAvg}</div>
+      <div class="stat-label">Per Week avg</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">${mostActiveDay(allLogs)}</div>
+      <div class="stat-label">Busiest Day</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">👩 ${mamaCount}</div>
+      <div class="stat-label">Mama Approvals</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">👨 ${tataCount}</div>
+      <div class="stat-label">Tata Approvals</div>
+    </div>
+    ${childStats.map(c => `
+    <div class="stat-card">
+      <div class="stat-num">${c.total}</div>
+      <div class="stat-label">${c.name}</div>
+      <div class="stat-sub">⬆️ ${c.empty} &nbsp; ⬇️ ${c.fill}</div>
+      <div class="stat-sub" style="margin-top:4px">~${c.weekAvg}/wk · 🔥${c.streak}d</div>
+    </div>`).join('')}
+    <div class="stat-card full">
+      <div class="stat-label" style="margin-bottom:6px">🏆 Leading: ${leader ? leader.name : '—'}</div>
+      <div class="approval-bar-wrap"><div class="approval-bar-fill" style="width:${approvalRate}%"></div></div>
+      <div class="stat-label" style="margin-top:6px">${approvalRate}% of entries approved</div>
+    </div>
+  `;
+
+  // Chart: score by child
+  if (chartByChild) chartByChild.destroy();
+  chartByChild = new Chart(document.getElementById('chartByChild').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: childStats.map(c => c.name),
+      datasets: [
+        { label: '⬆️ Emptied', data: childStats.map(c => c.empty), backgroundColor: '#3b9edd', borderRadius: 8 },
+        { label: '⬇️ Filled',  data: childStats.map(c => c.fill),  backgroundColor: '#4ecb71', borderRadius: 8 },
+      ]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } },
+      scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+
+  // Chart: activity last 30 days
+  if (chartActivity) chartActivity.destroy();
+  const actData = buildActivityData(allLogs, 30);
+  chartActivity = new Chart(document.getElementById('chartActivity').getContext('2d'), {
+    type: 'bar',
+    data: { labels: actData.map(d => d.label),
+      datasets: [{ label: 'Entries', data: actData.map(d => d.count), backgroundColor: '#9b59f5', borderRadius: 4 }] },
+    options: { responsive: true, plugins: { legend: { display: false } },
+      scales: { x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 9 } } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+
+  // Full table
+  document.getElementById('dashTable').innerHTML = allLogs.map(log => `
+    <tr class="${log.validated ? 'validated-row' : ''}">
+      <td>${log.childName}</td>
+      <td>${log.action === 'empty' ? '⬆️ Emptied' : '⬇️ Filled'}</td>
+      <td style="white-space:nowrap">${new Date(log.timestamp).toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'})}<br>
+        <span style="color:var(--gray);font-size:11px">${new Date(log.timestamp).toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',hour12:true})}</span></td>
+      <td><span class="tbl-badge ${log.validated?'ok':'pending'}">${log.validated?'✅':'⏳'}</span></td>
+      <td style="font-size:11px;color:var(--gray)">${log.validatedBy || '—'}</td>
+      <td style="font-style:italic;color:var(--gray);font-size:11px">${log.comment||''}</td>
+    </tr>`).join('');
+}
+
+// ── CHILD DASHBOARD ───────────────────────────────────────
+let chartChildActivity = null, chartChildSplit = null, chartChildDow = null;
+
+function openChildDashboard(name) {
+  renderChildDashboard(name);
+}
+
+function closeChildDashboard() {
+  document.getElementById('childDashOverlay').classList.remove('open');
+}
+
+function renderChildDashboard(name) {
+  const overlay = document.getElementById('childDashOverlay');
+  overlay.classList.add('open');
+  overlay.scrollTop = 0;
+
+  const logs    = allLogs.filter(l => l.childName === name);
+  const total   = logs.length;
+  const emptied = logs.filter(l => l.action === 'empty').length;
+  const filled  = logs.filter(l => l.action === 'fill').length;
+  const approved = logs.filter(l => l.validated).length;
+  const pending  = total - approved;
+  const approvalRate = total ? Math.round(approved / total * 100) : 0;
+  const streak  = calcStreak(logs);
+  const weekAvg = calcWeeklyAvg(logs);
+  const busiest = mostActiveDay(logs);
+  const last    = lastEntryDate(logs);
+
+  // Best week ever
+  const weekCounts = {};
+  logs.forEach(l => {
+    const d = new Date(l.timestamp);
+    const mon = new Date(d); mon.setDate(d.getDate() - d.getDay() + 1);
+    const key = mon.toISOString().slice(0, 10);
+    weekCounts[key] = (weekCounts[key] || 0) + 1;
+  });
+  const bestWeek = Object.values(weekCounts).length ? Math.max(...Object.values(weekCounts)) : 0;
+
+  const idx = children.indexOf(name);
+  const avatar = CHILD_AVATARS[idx % CHILD_AVATARS.length];
+  const colors = ['var(--pink)','var(--purple)','var(--yellow-dark)','var(--green)'];
+  const color  = colors[idx % colors.length];
+
+  document.getElementById('childDashTitle').textContent = `${avatar} ${name}`;
+  document.getElementById('childDashHero').innerHTML = `
+    <div style="text-align:center;margin-bottom:20px">
+      <span class="child-dash-avatar">${avatar}</span>
+      <div class="child-dash-name">${name}</div>
+      <div class="child-dash-sub">${total} total entr${total===1?'y':'ies'} · Last: ${last}</div>
+    </div>`;
+
+  document.getElementById('childDashStats').innerHTML = `
+    <div class="stat-card highlight">
+      <div class="stat-num">${total}</div>
+      <div class="stat-label">Total Entries</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">${streak} 🔥</div>
+      <div class="stat-label">Day Streak</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">${emptied}</div>
+      <div class="stat-label">⬆️ Emptied</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">${filled}</div>
+      <div class="stat-label">⬇️ Filled</div>
     </div>
     <div class="stat-card">
       <div class="stat-num" style="color:var(--green-dark)">${approved}</div>
@@ -961,64 +1196,73 @@ function renderDashboard() {
       <div class="stat-num" style="color:var(--yellow-dark)">${pending}</div>
       <div class="stat-label">Pending ⏳</div>
     </div>
-    ${childStats.map(c => `
     <div class="stat-card">
-      <div class="stat-num">${c.total}</div>
-      <div class="stat-label">${c.name}</div>
-      <div class="stat-sub">⬆️ ${c.empty} &nbsp; ⬇️ ${c.fill}</div>
-    </div>`).join('')}
+      <div class="stat-num">${weekAvg}</div>
+      <div class="stat-label">Per Week avg</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">${bestWeek}</div>
+      <div class="stat-label">Best Week 🏅</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">${busiest}</div>
+      <div class="stat-label">Fav Day</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">${approvalRate}%</div>
+      <div class="stat-label">Approval Rate</div>
+    </div>
+    <div class="stat-card full">
+      <div class="stat-label" style="margin-bottom:6px">Approval Progress</div>
+      <div class="approval-bar-wrap"><div class="approval-bar-fill" style="width:${approvalRate}%"></div></div>
+      <div class="stat-label" style="margin-top:6px">${approved} of ${total} entries approved</div>
+    </div>
   `;
 
-  // Chart: score by child (grouped bar)
-  if (chartByChild) chartByChild.destroy();
-  const ctx1 = document.getElementById('chartByChild').getContext('2d');
-  chartByChild = new Chart(ctx1, {
+  // Chart: activity last 30 days
+  if (chartChildActivity) chartChildActivity.destroy();
+  const actData = buildActivityData(logs, 30);
+  chartChildActivity = new Chart(document.getElementById('chartChildActivity').getContext('2d'), {
     type: 'bar',
-    data: {
-      labels: childStats.map(c => c.name),
-      datasets: [
-        { label: '⬆️ Emptied', data: childStats.map(c => c.empty), backgroundColor: '#3b9edd', borderRadius: 8 },
-        { label: '⬇️ Filled',  data: childStats.map(c => c.fill),  backgroundColor: '#4ecb71', borderRadius: 8 },
-      ]
-    },
-    options: {
-      responsive: true, plugins: { legend: { position: 'bottom' } },
-      scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-    }
+    data: { labels: actData.map(d => d.label),
+      datasets: [{ data: actData.map(d => d.count), backgroundColor: color, borderRadius: 4 }] },
+    options: { responsive: true, plugins: { legend: { display: false } },
+      scales: { x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 9 } } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
   });
 
-  // Chart: activity over last 14 days
-  if (chartActivity) chartActivity.destroy();
-  const days = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(today); d.setDate(d.getDate() - (13 - i));
-    return d.toISOString().slice(0, 10);
-  });
-  const dayCounts = days.map(day => allLogs.filter(l => l.timestamp.slice(0, 10) === day).length);
-  const dayLabels = days.map(d => { const dt = new Date(d + 'T12:00:00'); return dt.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); });
-  const ctx2 = document.getElementById('chartActivity').getContext('2d');
-  chartActivity = new Chart(ctx2, {
-    type: 'bar',
-    data: {
-      labels: dayLabels,
-      datasets: [{ label: 'Entries', data: dayCounts, backgroundColor: '#9b59f5', borderRadius: 6 }]
-    },
-    options: {
-      responsive: true, plugins: { legend: { display: false } },
-      scales: { x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-    }
+  // Chart: emptied vs filled donut
+  if (chartChildSplit) chartChildSplit.destroy();
+  chartChildSplit = new Chart(document.getElementById('chartChildSplit').getContext('2d'), {
+    type: 'doughnut',
+    data: { labels: ['⬆️ Emptied', '⬇️ Filled'],
+      datasets: [{ data: [emptied, filled], backgroundColor: ['#3b9edd','#4ecb71'], borderWidth: 0 }] },
+    options: { responsive: true, cutout: '65%',
+      plugins: { legend: { position: 'bottom' } } }
   });
 
-  // Full table
-  const tbody = document.getElementById('dashTable');
-  tbody.innerHTML = allLogs.map(log => `
+  // Chart: day of week
+  if (chartChildDow) chartChildDow.destroy();
+  const dowLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dowCounts = Array(7).fill(0);
+  logs.forEach(l => dowCounts[new Date(l.timestamp).getDay()]++);
+  chartChildDow = new Chart(document.getElementById('chartChildDow').getContext('2d'), {
+    type: 'bar',
+    data: { labels: dowLabels,
+      datasets: [{ data: dowCounts, backgroundColor: color, borderRadius: 6 }] },
+    options: { responsive: true, plugins: { legend: { display: false } },
+      scales: { x: { grid: { display: false } }, y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+
+  // Table
+  document.getElementById('childDashTable').innerHTML = logs.map(log => `
     <tr class="${log.validated ? 'validated-row' : ''}">
-      <td>${log.childName}</td>
       <td>${log.action === 'empty' ? '⬆️ Emptied' : '⬇️ Filled'}</td>
-      <td style="white-space:nowrap">${new Date(log.timestamp).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}<br><span style="color:var(--gray);font-size:11px">${new Date(log.timestamp).toLocaleTimeString('en-CA', { hour: '2-digit', minute: '2-digit', hour12: true })}</span></td>
-      <td><span class="tbl-badge ${log.validated ? 'ok' : 'pending'}">${log.validated ? '✅' : '⏳'}</span></td>
-      <td style="font-style:italic;color:var(--gray);font-size:11px">${log.comment || ''}</td>
-    </tr>
-  `).join('');
+      <td style="white-space:nowrap">${new Date(log.timestamp).toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'})}<br>
+        <span style="color:var(--gray);font-size:11px">${new Date(log.timestamp).toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',hour12:true})}</span></td>
+      <td><span class="tbl-badge ${log.validated?'ok':'pending'}">${log.validated?'✅':'⏳'}</span></td>
+      <td style="font-size:11px">${log.validatedBy || '—'}</td>
+      <td style="font-style:italic;color:var(--gray);font-size:11px">${log.comment||''}</td>
+    </tr>`).join('');
 }
 
 // ── EDIT / DELETE FLOW ──────────────────────────────
@@ -1249,7 +1493,7 @@ async function submitPin() {
 
     <!-- CHART: activity over last 14 days -->
     <div class="chart-card">
-      <div class="chart-title">📅 Activity — Last 14 Days</div>
+      <div class="chart-title">📅 Activity — Last 30 Days</div>
       <canvas id="chartActivity" height="160"></canvas>
     </div>
 
@@ -1263,10 +1507,50 @@ async function submitPin() {
             <th>Action</th>
             <th>Date / Time</th>
             <th>Status</th>
+            <th>Approved By</th>
             <th>Comment</th>
           </tr>
         </thead>
         <tbody id="dashTable"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- CHILD DASHBOARD OVERLAY -->
+<div class="dashboard-overlay" id="childDashOverlay">
+  <div class="dashboard-inner">
+    <div class="dashboard-header">
+      <button class="dashboard-back" onclick="closeChildDashboard()">←</button>
+      <div class="dashboard-title" id="childDashTitle">📊 Stats</div>
+    </div>
+    <div id="childDashHero"></div>
+    <div class="stat-grid" id="childDashStats"></div>
+    <div class="chart-card">
+      <div class="chart-title">📅 Activity — Last 30 Days</div>
+      <canvas id="chartChildActivity" height="160"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">⬆️ vs ⬇️ Breakdown</div>
+      <canvas id="chartChildSplit" height="180"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">📆 Busiest Day of Week</div>
+      <canvas id="chartChildDow" height="140"></canvas>
+    </div>
+    <div class="table-card">
+      <div class="chart-title">📋 All Entries</div>
+      <table class="entries-table">
+        <thead>
+          <tr>
+            <th>Action</th>
+            <th>Date / Time</th>
+            <th>Status</th>
+            <th>Approved By</th>
+            <th>Comment</th>
+          </tr>
+        </thead>
+        <tbody id="childDashTable"></tbody>
       </table>
     </div>
   </div>
