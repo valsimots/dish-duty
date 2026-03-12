@@ -552,6 +552,13 @@
       <input type="datetime-local" class="edit-datetime" id="editTimestamp">
     </div>
     <div class="edit-field">
+      <label>Status</label>
+      <select class="edit-select" id="editStatus">
+        <option value="pending">⏳ Pending</option>
+        <option value="approved">✅ Approved</option>
+      </select>
+    </div>
+    <div class="edit-field">
       <label>Comment</label>
       <textarea class="edit-comment" id="editComment" maxlength="165" placeholder="Optional note about this entry…" oninput="updateCharCount()"></textarea>
       <div class="edit-char-count" id="charCount">0 / 165</div>
@@ -762,6 +769,7 @@ function openEditModal(id) {
   const sel = document.getElementById('editChild');
   sel.innerHTML = children.map(n => `<option value="${n}" ${n === log.childName ? 'selected' : ''}>${n}</option>`).join('');
   document.getElementById('editAction').value = log.action;
+  document.getElementById('editStatus').value = log.validated ? 'approved' : 'pending';
   // Convert ISO timestamp to datetime-local format (YYYY-MM-DDTHH:MM)
   const localDt = new Date(log.timestamp);
   const pad = n => String(n).padStart(2, '0');
@@ -790,10 +798,11 @@ async function saveEdit() {
   const action = document.getElementById('editAction').value;
   const timestampVal = document.getElementById('editTimestamp').value;
   const comment = document.getElementById('editComment').value.trim();
+  const validated = document.getElementById('editStatus').value === 'approved';
   const res = await fetch(`/api/log/${pendingEditId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pin: verifiedPin, childName, action, timestamp: timestampVal, comment })
+    body: JSON.stringify({ pin: verifiedPin, childName, action, timestamp: timestampVal, comment, validated })
   });
   if (res.ok) {
     closeEdit();
