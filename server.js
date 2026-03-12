@@ -83,6 +83,10 @@ app.patch('/api/log/:id', (req, res) => {
 
   if (childName) entry.childName = childName;
   if (action && ['empty', 'fill'].includes(action)) entry.action = action;
+  if (req.body.timestamp) {
+    const ts = new Date(req.body.timestamp);
+    if (!isNaN(ts)) entry.timestamp = ts.toISOString();
+  }
   saveData(data);
   res.json(entry);
 });
