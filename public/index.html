@@ -843,7 +843,7 @@ function renderChildren() {
   const grid = document.getElementById('childGrid');
   grid.innerHTML = children.map((name, i) => `
     <button class="child-btn ripple-container" onclick="selectChild('${name}', this)">
-      <button class="child-stats-btn" onclick="event.stopPropagation(); openChildDashboard('${name}')">Stats</button>
+      <span class="child-stats-btn" onclick="event.stopPropagation(); openChildDashboard('${name}')">Stats</span>
       ${getAvatar(i)}
       <span class="name">${name}</span>
       ${getTallies(name)}
