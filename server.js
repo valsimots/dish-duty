@@ -87,6 +87,9 @@ app.patch('/api/log/:id', (req, res) => {
     const ts = new Date(req.body.timestamp);
     if (!isNaN(ts)) entry.timestamp = ts.toISOString();
   }
+  if (typeof req.body.comment !== 'undefined') {
+    entry.comment = req.body.comment.slice(0, 165);
+  }
   saveData(data);
   res.json(entry);
 });
