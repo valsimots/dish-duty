@@ -144,8 +144,6 @@
   .child-btn.selected:nth-child(4) { background: var(--green); color: white; }
   .child-btn:active { transform: scale(0.95); }
   .child-btn .avatar { font-size: 32px; }
-  .child-btn .avatar-img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; }
-  .log-name .avatar-img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; vertical-align: middle; }
   .child-btn .name { font-size: 16px; }
   .child-btn .tally {
     font-family: 'Nunito', sans-serif;
@@ -724,7 +722,7 @@
 
 <script>
 const CHILD_AVATARS = ['🦊', '🐬', '🦋', '🐸', '⭐', '🦄'];
-const CHILD_IMAGES = ['/image1.png', '/image2.png'];
+
 let selectedParent = null;
 
 let selectedChild = null;
@@ -782,8 +780,6 @@ async function init() {
 }
 
 function getAvatar(index) {
-  const imgSrc = CHILD_IMAGES[index];
-  if (imgSrc) return `<img class="avatar-img" src="${imgSrc}" onerror="this.outerHTML='<span class=\\'avatar\\'>${CHILD_AVATARS[index % CHILD_AVATARS.length]}</span>'">`;
   return `<span class="avatar">${CHILD_AVATARS[index % CHILD_AVATARS.length]}</span>`;
 }
 
