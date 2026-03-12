@@ -401,6 +401,21 @@
     outline: none;
   }
   .edit-datetime:focus { border-color: var(--blue); }
+  .edit-comment {
+    width: 100%; padding: 12px 14px;
+    border-radius: 12px; border: 2px solid rgba(59,158,221,0.25);
+    font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 600;
+    color: var(--text); background: var(--light);
+    outline: none; resize: none; height: 80px; line-height: 1.4;
+  }
+  .edit-comment:focus { border-color: var(--blue); }
+  .edit-char-count { font-size: 11px; color: var(--gray); text-align: right; margin-top: 4px; font-weight: 700; }
+  .edit-char-count.near-limit { color: var(--red); }
+  .log-comment {
+    font-size: 12px; color: var(--text);
+    font-weight: 600; margin-top: 3px;
+    font-style: italic; opacity: 0.75;
+  }
   .edit-actions { display: flex; gap: 10px; margin-top: 20px; }
   .btn-save {
     flex: 1; padding: 14px;
@@ -535,6 +550,11 @@
     <div class="edit-field">
       <label>Date &amp; Time</label>
       <input type="datetime-local" class="edit-datetime" id="editTimestamp">
+    </div>
+    <div class="edit-field">
+      <label>Comment</label>
+      <textarea class="edit-comment" id="editComment" maxlength="165" placeholder="Optional note about this entry…" oninput="updateCharCount()"></textarea>
+      <div class="edit-char-count" id="charCount">0 / 165</div>
     </div>
     <div class="edit-actions">
       <button class="btn-save" onclick="saveEdit()">Save Changes</button>
@@ -692,6 +712,7 @@ function renderLogs() {
         <div class="log-name">${avatar} ${log.childName}</div>
         <div class="log-action">${log.action === 'empty' ? 'Emptied dishwasher' : 'Filled dishwasher'}</div>
         <div class="log-time">${fmtDate(log.timestamp)}</div>
+        ${log.comment ? `<div class="log-comment">💬 ${log.comment}</div>` : ''}
         ${log.validated ? `<div class="log-time" style="color:var(--green-dark)">✓ ${log.validatedBy} · ${fmtDate(log.validatedAt)}</div>` : ''}
         <div class="parent-actions">
           <button class="action-icon-btn edit-btn" onclick="openEditFlow('${log.id}')" title="Edit">✏️</button>
@@ -746,6 +767,9 @@ function openEditModal(id) {
   const pad = n => String(n).padStart(2, '0');
   const dtLocal = `${localDt.getFullYear()}-${pad(localDt.getMonth()+1)}-${pad(localDt.getDate())}T${pad(localDt.getHours())}:${pad(localDt.getMinutes())}`;
   document.getElementById('editTimestamp').value = dtLocal;
+  const comment = log.comment || '';
+  document.getElementById('editComment').value = comment;
+  updateCharCount();
   document.getElementById('editModal').classList.add('open');
 }
 
@@ -754,14 +778,22 @@ function closeEdit() {
   pendingEditId = null;
 }
 
+function updateCharCount() {
+  const val = document.getElementById('editComment').value;
+  const el = document.getElementById('charCount');
+  el.textContent = `${val.length} / 165`;
+  el.classList.toggle('near-limit', val.length > 140);
+}
+
 async function saveEdit() {
   const childName = document.getElementById('editChild').value;
   const action = document.getElementById('editAction').value;
   const timestampVal = document.getElementById('editTimestamp').value;
+  const comment = document.getElementById('editComment').value.trim();
   const res = await fetch(`/api/log/${pendingEditId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pin: verifiedPin, childName, action, timestamp: timestampVal })
+    body: JSON.stringify({ pin: verifiedPin, childName, action, timestamp: timestampVal, comment })
   });
   if (res.ok) {
     closeEdit();
